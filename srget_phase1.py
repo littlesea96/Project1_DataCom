@@ -23,7 +23,7 @@ def mkDownloadRequest(serv, objName):
 
 #print "{!r}".format(mkDownloadRequest("intranet.mahidol", "/"))
 
-servName = "www.google.com"
+servName = "intranet.mahidol"
 obj = "/"
 # servName = "cs.muic.mahidol.ac.th"
 # obj = "/courses/ds/hw/a1.pdf"
@@ -41,14 +41,15 @@ sock.send(request)
 # data_body = None
 # content_length_num = None
 def get_header(sock_):
+	data = ""
 	while True:
-		data = sock.recv(1024)
+		data_chunk = sock_.recv(1024)
+		data += data_chunk
 		if "\r\n\r\n" in data:
 			end_header_index = data.find("\r\n\r\n")
-			header = data[:end_header_index]
+			header = data[:end_header_index+3] # +3 for \r\n\r\n
 			the_rest = data[end_header_index+4:] # +4 for \r\n\r\n
 			break
-
 
 	return header, the_rest
 
@@ -56,9 +57,9 @@ def get_header(sock_):
 # print get_header(sock)
 
 
-def get_content_length(sock_):
+def get_content_length(header):
 
-	header = get_header(sock_)[0]
+	# header = get_header(sock_)[0]
 
 	content_length_index = header.find("Content-Length:")
 	end_header_index = header.find("\r\n\r\n")
@@ -72,10 +73,28 @@ def get_content_length(sock_):
 
 	return content_length_num
 
-print get_content_length(sock)
+# print get_content_length(sock)
+
+def get_body(sock_):
+	header, the_rest = get_header(sock_)
+	data_body = the_rest
+	print data_body
+	content_length = get_content_length(header)
+	# print content_length
+	while True:
+		data_chunk = sock.recv(1024)
+		data_body += data_chunk
+		if len(data_body) == content_length:
+			print "full"
+			break
+	return data_body
+
+print get_body(sock)
 
 
-def srget(sock_):
+# def srget(sock_):
+
+
 	
 
 # if not os.path.exist

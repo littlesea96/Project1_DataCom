@@ -19,6 +19,9 @@ sock.connect((servName, port))
 request = mkDownloadRequest(servName, obj)
 sock.send(request)
 
+data_body = None
+content_length_num = None
+
 while True:
     data = sock.recv(1024)
 
@@ -39,7 +42,7 @@ while True:
     # end_body_index = data.find("<\HTML>")
 
 
-    data_body = data[end_header_index:].lstrip()
+    data_body = data[end_header_index:]
     # data_body = data_body.
     # print data_body
     print "body len", len(data_body)

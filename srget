@@ -8,12 +8,10 @@ import sys
 
 def srget():
 
-	# print sys.argv
 
 	path = sys.argv[3]
 	file_name = sys.argv[2]
 
-	# print file_name, path
 
 	if "https" in path:
 		sys.exit(2)
@@ -23,7 +21,6 @@ def srget():
 	def mkDownloadRequest(serv, objName):
 		return ("GET {o} HTTP/1.1\r\n"+"Host: {s}"+"\r\n\r\n").format(o=objName, s=serv)
 
-	#print "{!r}".format(mkDownloadRequest("intranet.mahidol", "/"))
 
 	def resumeRequest(serv, objName, filesize):
 		return ("GET {o} HTTP/1.1\r\n"+"Host: {s}"+"\r\n" + "Range: bytes={h}-"+"\r\n\r\n").format(o=objName, s=serv, h=str(filesize))
@@ -38,8 +35,6 @@ def srget():
 	if port == None:
 		port = 80
 
-	# print servName
-	# print port
 
 	## creat an empty socket
 	sock = sk.socket(sk.AF_INET, sk.SOCK_STREAM)
@@ -50,8 +45,6 @@ def srget():
 	request = mkDownloadRequest(servName, obj)
 	sock.send(request)
 
-	# data_body = None
-	# content_length_num = None
 	def get_header(sock_):
 		data = ""
 		while True:
@@ -65,8 +58,6 @@ def srget():
 
 		return header, the_rest
 
-
-	# print get_header(sock)
 
 
 	def get_content_length(header):
@@ -84,24 +75,17 @@ def srget():
 			content_length_num = content_length_line[colon_index+2:end_content_length_line_index]
 
 
-		print "content_length_num", content_length_num
-
 		return content_length_num
 
-	# print get_content_length(sock)
 
 	def get_content(sock_):
 
 		header, the_rest = get_header(sock_)
 
-		# print header
 		data_body = the_rest
-		# print data_body
-		content_length = get_content_length(header)
-		# print content_length
-		# print content_length
 
-		# f = open(file_name, "a+")
+		content_length = get_content_length(header)
+
 		fh = open("header_"+file_name, "a+")
 
 		fh.write(header)
@@ -120,17 +104,10 @@ def srget():
 
 				header2, the_rest2 = get_header(sock2)
 
-				# print header
 				data_body2 = the_rest
-				# print data_body
+
 				content_length2 = get_content_length(header)
-				# print content_length
-				# print content_length
 
-				# f = open(file_name, "a+")
-				# fh = open("header_"+file_name, "a+")
-
-				# fh.write(header)
 
 				f = open(file_name, "a+")
 				f.write(the_rest2)
@@ -138,8 +115,6 @@ def srget():
 				
 
 				while True:
-					print os.path.getsize(file_name), '----'
-					print content_length, '---'
 					if os.path.getsize(file_name) == int(content_length):
 
 						os.remove("header_"+file_name)
@@ -155,20 +130,16 @@ def srget():
 
 		
 		else:
-			print "enter big else"
 			f = open(file_name, "a+")
 			f.write(the_rest)
 			f.flush()
 
 			while True:
 				if content_length == 0 and len(data_chunk) == 0:
-					print "full"
 					os.remove("header_"+file_name)
 					f.close()
 					break
 				elif len(data_body) == int(content_length):
-					print len(data_body)
-					print "full"
 					os.remove("header_"+file_name)
 					f.close()
 					sock_.close()

@@ -130,20 +130,24 @@ def srget():
 		while True:
 			if content_length == 0 and len(data_chunk) == 0:
 				print "full"
-				f.write(data_body)
+				# f.write(data_body)
 				os.remove("header_"+file_name)
 				f.close()
 				break
 			elif len(data_body) == int(content_length):
 				print len(data_body)
 				print "full"
-				f.write(data_body)
+				# f.write(data_body)
 				os.remove("header_"+file_name)
 				f.close()
+				sock_.close()
 				break
 			else:
 				data_chunk = sock_.recv(1024)
 				data_body += data_chunk
+
+				f.write(data_chunk)
+				f.flush()
 
 			# 	f.write(data_body)
 

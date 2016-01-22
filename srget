@@ -137,7 +137,8 @@ def srget():
 				
 
 				while True:
-					if len(data_body) == int(content_length):
+					print os.path.getsize(file_name)
+					if os.path.getsize(file_name) == int(content_length):
 						os.remove("header_"+file_name)
 						f.close()
 						sock2.close()

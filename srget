@@ -1,0 +1,186 @@
+#!/usr/bin/env python
+
+import socket as sk
+import os
+from urlparse import urlparse
+import sys
+
+
+def srget():
+
+	# print sys.argv
+
+	path = sys.argv[3]
+	file_name = sys.argv[2]
+
+	# print file_name, path
+
+	if "https" in path:
+		sys.exit(2)
+	elif "http://" not in path:
+		path = "http://" + path
+
+	def mkDownloadRequest(serv, objName):
+		return ("GET {o} HTTP/1.1\r\n"+"Host: {s}"+"\r\n\r\n").format(o=objName, s=serv)
+
+	#print "{!r}".format(mkDownloadRequest("intranet.mahidol", "/"))
+
+	def resumeRequest(serv, objName, filesize):
+		return ("GET {o} HTTP/1.1\r\n"+"Host: {s}"+"\r\n" + "Range: bytes={h}-"+"\r\n\r\n").format(o=objName, s=serv, h=str(filesize))
+
+
+	url = urlparse(path)
+
+	servName = url[1]
+	obj = url[2]
+	port = url.port
+
+	if port == None:
+		port = 80
+
+	# print servName
+	# print port
+
+	## creat an empty socket
+	sock = sk.socket(sk.AF_INET, sk.SOCK_STREAM)
+
+	## connect to a destination as specified by the pair
+	sock.connect((servName, port))
+
+	request = mkDownloadRequest(servName, obj)
+	sock.send(request)
+
+	# data_body = None
+	# content_length_num = None
+	def get_header(sock_):
+		data = ""
+		while True:
+			data_chunk = sock_.recv(1024)
+			data += data_chunk
+			if "\r\n\r\n" in data:
+				end_header_index = data.find("\r\n\r\n")
+				header = data[:end_header_index+3] # +3 for \r\n\r\n
+				the_rest = data[end_header_index+4:] # +4 for \r\n\r\n
+				break
+
+		return header, the_rest
+
+
+	# print get_header(sock)
+
+
+	def get_content_length(header):
+
+		if "Content-Length:" not in header:
+			content_length_num = 0
+		else:
+			content_length_index = header.find("Content-Length:")
+			end_header_index = header.find("\r\n\r\n")
+			content_length_line = header[content_length_index:end_header_index]
+
+			end_content_length_line_index = content_length_line.find("\r\n")
+			colon_index = content_length_line.find(":")
+
+			content_length_num = content_length_line[colon_index+2:end_content_length_line_index]
+
+
+		print "content_length_num", content_length_num
+
+		return content_length_num
+
+	# print get_content_length(sock)
+
+	def get_content(sock_):
+
+		header, the_rest = get_header(sock_)
+
+		# print header
+		data_body = the_rest
+		# print data_body
+		content_length = get_content_length(header)
+		# print content_length
+		# print content_length
+
+		# f = open(file_name, "a+")
+		fh = open("header_"+file_name, "a+")
+
+		fh.write(header)
+
+		if os.path.exists(file_name):
+			print "enter big if"
+			file_size = os.path.getsize(file_name)
+			if file_size != content_length: # need to resume
+				sock_.close()
+
+				sock2 = sk.socket(sk.AF_INET, sk.SOCK_STREAM)
+				sock2.connect((servName, port))
+				request = resumeRequest(servName, obj, file_size)
+				sock2.send(request)
+
+				header2, the_rest2 = get_header(sock2)
+
+				# print header
+				data_body2 = the_rest
+				# print data_body
+				content_length2 = get_content_length(header)
+				# print content_length
+				# print content_length
+
+				# f = open(file_name, "a+")
+				# fh = open("header_"+file_name, "a+")
+
+				# fh.write(header)
+
+				f = open(file_name, "a+")
+				f.write(the_rest2)
+				f.flush()
+				
+
+				while True:
+					if len(data_body) == int(content_length):
+						os.remove("header_"+file_name)
+						f.close()
+						sock2.close()
+						break
+					else:
+						data_chunk = sock2.recv(1024)
+						data_body += data_chunk
+
+						f.write(data_chunk)
+						f.flush()
+		
+		else:
+			print "enter big else"
+			f = open(file_name, "a+")
+			f.write(the_rest)
+			f.flush()
+
+			while True:
+				if content_length == 0 and len(data_chunk) == 0:
+					print "full"
+					os.remove("header_"+file_name)
+					f.close()
+					break
+				elif len(data_body) == int(content_length):
+					print len(data_body)
+					print "full"
+					os.remove("header_"+file_name)
+					f.close()
+					sock_.close()
+					break
+				else:
+					data_chunk = sock_.recv(1024)
+					data_body += data_chunk
+
+					f.write(data_chunk)
+					f.flush()
+
+
+		return header, data_body
+
+	get_content(sock)
+
+	
+srget()
+
+

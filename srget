@@ -109,6 +109,7 @@ def srget():
 		if os.path.exists(file_name):
 			print "enter big if"
 			file_size = os.path.getsize(file_name)
+			print file_size, "filesize"
 			if file_size != content_length: # need to resume
 				sock_.close()
 
@@ -137,18 +138,21 @@ def srget():
 				
 
 				while True:
-					print os.path.getsize(file_name)
+					print os.path.getsize(file_name), '----'
+					print content_length, '---'
 					if os.path.getsize(file_name) == int(content_length):
+
 						os.remove("header_"+file_name)
 						f.close()
 						sock2.close()
 						break
 					else:
 						data_chunk = sock2.recv(1024)
-						data_body += data_chunk
+						data_body2 += data_chunk
 
 						f.write(data_chunk)
 						f.flush()
+
 		
 		else:
 			print "enter big else"

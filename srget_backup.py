@@ -202,13 +202,21 @@ def srget():
 
 			len_content = file_size + len(the_rest)
 
-			print "ETag_old_file_id", ETag_old_file_id
-			print "ETag", ETag
+			resume = False
 
 			print ETag_old_file_id == ETag
 
 			if ETag_old_file_id == ETag:
-				print "check ETag"
+				resume = True
+
+			elif last_modified_old_file == last_modified:
+				resume = True
+
+			elif content_length == 0:
+				resume = False
+
+
+			if resume:
 
 				f = open(file_name, "a+")
 				f.write(the_rest)
@@ -231,31 +239,7 @@ def srget():
 
 						f.write(data_chunk)
 						f.flush()
-
-			elif last_modified_old_file == last_modified:
-				print "check last modified"
-
-				f = open(file_name, "a+")
-				f.write(the_rest)
-				f.flush()
-
-				while True:
-
-					if len_content == int(content_length):
-						os.remove("header_"+file_name+"_temp.txt")
-						f.close()
-						sock.close()
-						break
-					else:
-						data_chunk = sock.recv(1024)
-						data_body += data_chunk
-
-						len_content += len(data_chunk)
-
-						f.write(data_chunk)
-						f.flush()
-
-			elif content_length == 0:
+			else:
 				sock.close()
 
 				sock2 = open_socket(path, file_name, 0)
@@ -297,7 +281,7 @@ def srget():
 
 
 	else:
-		print "enter else"
+		print "normal download"
 		sock = open_socket(path, file_name, 0)
 		# sock = open_socket_for_resume(path, file_name, 0, 117094)
 

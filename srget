@@ -19,14 +19,11 @@ def get_header(data_chunk, filename):
 		header = data_chunk[:end_header_index+3] # +3 for \r\n\r\n
 		the_rest = data_chunk[end_header_index+4:] # +4 for \r\n\r\n
 
-		# print "header", header
-		# print "the_rest", the_rest
-
 		header_file = open("header_"+filename+"_temp.txt", "a+")
 		header_file.write(header)
 		header_file.flush()
 		header_file.close()
-		# print "header in get_header", header
+
 		return header, the_rest
 
 def get_header_from_sock(path):
@@ -172,22 +169,21 @@ class HTTPClient(asyncore.dispatcher):
 
 	def handle_read(self): 
 		data_chunk = self.recv(1024)
-		# self.logger.debug("recv {0} bytes".format(len(data_chunk)))
 
 		f = open(self.filename, "a+")
 
 		if self.header_kept == True:
-			# print "enter if"
+			
 			header, the_rest = get_header(data_chunk, self.filename)
-			# print header
+			
 			f.write(the_rest)
 			f.flush()
 			f.close()
 
 			if header != "":
-				# print "enter if inside"
+				
 				self.header_kept = False
-				# print "keep all header"
+				
 		else:
 		
 			f.write(data_chunk)
@@ -230,7 +226,7 @@ def srget():
 
 		file_size = os.path.getsize(file_name)
 
-		# content_length = get_content_length(get_header_from_sock(path))
+		
 
 		if file_size == int(content_length):
 			print "The file is already complete."
@@ -273,8 +269,7 @@ def srget():
 	
 	for n in range(connection_number):
 		chunk_file = name + "_" + str(n) + "." + extension
-		# print type(content_length)
-		# print type(connection_number)
+		
 		start = (content_length/connection_number + 1)*n
 
 		end = (content_length/connection_number) + start
@@ -296,14 +291,10 @@ def srget():
 		with open(chunk_file, "r") as cf:
 			data = cf.read()
 			content += data
+		os.remove(chunk_file)
 
 	with open(file_name, "a+") as f:
 		f.write(content)
-
-	for n in range(connection_number):
-		chunk_file = name + "_" + str(n) + "." + extension
-		os.remove(chunk_file)
-
 	
 
 

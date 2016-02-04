@@ -125,7 +125,6 @@ def make_request(req_type, what, details, size, end_point, version="1.1"):
  
     full_request = request_line + NL + detail_lines+ NL + bytes_range + NL + NL
 
-    print "full_request", full_request
     return full_request
 
 
@@ -201,10 +200,15 @@ class HTTPClient(asyncore.dispatcher):
 
 
 def srget(): ## receive input from user and extract it in to path, file_name, connection_number
-	path = sys.argv[5]
+	input_length = len(sys.argv)
+	if input_length != 6:
+		connection_number = 1
+	elif input_length == 6:
+		connection_number = int(sys.argv[4])
+	path = sys.argv[input_length-1]
 	file_name = sys.argv[2]
 	name, extension = file_name.split(".") ## extract the file name 
-	connection_number = int(sys.argv[4])
+	
 
 	if "https" in path:
 		print "Unable to download from this cite."

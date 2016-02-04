@@ -5,6 +5,11 @@ from cStringIO import StringIO
 import sys
 import os
 from urlparse import urlparse
+import socket as sk
+
+
+def headerDownloadRequest(serv, objName):
+	return ("HEAD {o} HTTP/1.1\r\n"+"Host: {s}"+"\r\n" + "\r\n\r\n").format(o=objName, s=serv)
 
 
 def get_header(data_chunk, filename):
@@ -17,12 +22,37 @@ def get_header(data_chunk, filename):
 		# print "header", header
 		# print "the_rest", the_rest
 
-		header_file = open("header_"+filename+"temp.txt", "a+")
+		header_file = open("header_"+filename+"_temp.txt", "a+")
 		header_file.write(header)
 		header_file.flush()
 		header_file.close()
-		print "header in get_header", header
+		# print "header in get_header", header
 		return header, the_rest
+
+def get_header_from_sock(path):
+	url = urlparse(path)
+
+	servName = url[1]
+	obj = url[2]
+	port = url.port
+
+	if port == None:
+		port = 80
+
+	## creat an empty socket
+	sock = sk.socket(sk.AF_INET, sk.SOCK_STREAM)
+
+	## connect to a destination as specified by the pair
+	sock.connect((servName, port))
+
+	request = headerDownloadRequest(servName, obj)
+	sock.send(request)
+
+	header = sock.recv(1024)
+
+	sock.close()
+
+	return header
 
 
 def get_content_length(header):
@@ -135,6 +165,8 @@ class HTTPClient(asyncore.dispatcher):
 
 	def handle_close(self):
 		self.logger.debug("got disconnected")
+		os.remove("header_" + self.filename +"_temp.txt")
+
 		self.close()
 
 
@@ -147,7 +179,7 @@ class HTTPClient(asyncore.dispatcher):
 		if self.header_kept == True:
 			print "enter if"
 			header, the_rest = get_header(data_chunk, self.filename)
-			print header
+			# print header
 			f.write(the_rest)
 			f.flush()
 			f.close()
@@ -192,7 +224,48 @@ def srget():
 		port = 80
 
 
-	HTTPClient(servName, obj, port, 0, "", file_name)
+	if os.path.exists(file_name):
+
+		file_size = os.path.getsize(file_name)
+
+		content_length = get_content_length(get_header_from_sock(path))
+
+		if file_size == int(content_length):
+			print "The file is already complete."
+			sys.exit(2)
+		else:
+
+			ETag = get_ETag(get_header_from_sock(path))
+			Etag_old_file = get_ETag(read_header_file("header_"+file_name+"_temp.txt"))
+
+			last_modified = get_last_modified(get_header_from_sock(path))
+			last_modified_old_file = get_last_modified(read_header_file("header_"+file_name+"_temp.txt"))
+
+			content_length_old_file = get_content_length(read_header_file("header_"+file_name+"_temp.txt"))
+
+			resume = False
+
+			if ETag == Etag_old_file:
+				resume = True
+			elif last_modified == last_modified_old_file:
+				resume = True
+			else:
+				resume = False
+
+			print "resume"
+
+			if resume:
+				print "resuming"
+
+				HTTPClient(servName, obj, port, file_size, content_length, file_name)
+
+			else:
+				print "normal download"
+
+				HTTPClient(servName, obj, port, 0, "", file_name)
+	else:
+
+		HTTPClient(servName, obj, port, 0, "", file_name)
 
 	logging.basicConfig(level=logging.DEBUG,
     format="%(asctime)-15s %(name)s: %(message)s"

@@ -69,7 +69,7 @@ def get_content_length(header):
 
 	return int(content_length_num)
 
-def read_header_file(header_file):
+def read_header_file(header_file): # for read each line in the file and put it all in string
 
 	header_file = open(header_file, "r")
 	header = ""
@@ -121,7 +121,7 @@ def make_request(req_type, what, details, size, end_point, version="1.1"):
         "{}: {}".format(name, value) for name, value in details.iteritems()
     )
 
-    bytes_range = "Range: bytes={h}-{e}".format(h=size, e=end_point)
+    bytes_range = "Range: bytes={h}-{e}".format(h=size, e=end_point) # range of the content
  
     full_request = request_line + NL + detail_lines+ NL + bytes_range + NL + NL
 
@@ -157,7 +157,7 @@ class HTTPClient(asyncore.dispatcher):
 
 
 	def handle_connect(self):
-		self.logger.debug("connection established")
+		pass
 
 
 	def handle_close(self):
@@ -172,17 +172,17 @@ class HTTPClient(asyncore.dispatcher):
 
 		f = open(self.filename, "a+")
 
-		if self.header_kept == True:
+		if self.header_kept == True: ## check if the header need to be kept
 			
 			header, the_rest = get_header(data_chunk, self.filename)
 			
-			f.write(the_rest)
+			f.write(the_rest) # write the data content that left from the header into file
 			f.flush()
 			f.close()
 
 			if header != "":
 				
-				self.header_kept = False
+				self.header_kept = False ## set self.header_kept if the header is already kept
 				
 		else:
 		
@@ -200,29 +200,30 @@ class HTTPClient(asyncore.dispatcher):
 
 
 
-def srget():
+def srget(): ## receive input from user and extract it in to path, file_name, connection_number
 	path = sys.argv[5]
 	file_name = sys.argv[2]
-	name, extension = file_name.split(".")
+	name, extension = file_name.split(".") ## extract the file name 
 	connection_number = int(sys.argv[4])
 
 	if "https" in path:
+		print "Unable to download from this cite."
 		sys.exit(2)
-	elif "http://" not in path:
+	elif "http://" not in path: # it cannot parse if there the http:// is not there, so we add if it is not there
 		path = "http://" + path
 
-	url = urlparse(path)
+	url = urlparse(path) ## parse path to get servName, obj, port
 
 	servName = url[1]
 	obj = url[2]
-	port = url.port
+	port = url.port ## this might return None
 
 	if port == None:
 		port = 80
 
 	content_length = get_content_length(get_header_from_sock(path))
 
-	if os.path.exists(file_name):
+	if os.path.exists(file_name): ## check if the file exist
 
 		file_size = os.path.getsize(file_name)
 
@@ -267,33 +268,29 @@ def srget():
 
 	clients = []
 	
-	for n in range(connection_number):
-		chunk_file = name + "_" + str(n) + "." + extension
+	for n in range(connection_number): ## create HTTPClient for n connection
+		chunk_file = name + "_" + str(n) + "." + extension 
 		
-		start = (content_length/connection_number + 1)*n
+		start = (content_length/connection_number + 1)*n 	########################
+															### range of content ###
+		end = (content_length/connection_number) + start	########################
 
-		end = (content_length/connection_number) + start
-
-		clients.append(HTTPClient(servName, obj, port, start, end, chunk_file))
-
-
+		clients.append(HTTPClient(servName, obj, port, start, end, chunk_file)) 
 
 
-	logging.basicConfig(level=logging.DEBUG,
-    format="%(asctime)-15s %(name)s: %(message)s"
-    )
+
  
-	asyncore.loop()
+	asyncore.loop() ## start download
 
 	content = ""
-	for n in range(connection_number):
+	for n in range(connection_number): # receive each data from n file
 		chunk_file = name + "_" + str(n) + "." + extension
 		with open(chunk_file, "r") as cf:
 			data = cf.read()
 			content += data
 		os.remove(chunk_file)
 
-	with open(file_name, "a+") as f:
+	with open(file_name, "a+") as f: # write all the content into a complete file
 		f.write(content)
 	
 

@@ -70,7 +70,7 @@ def get_content_length(header):
 		content_length_num = content_length_line[colon_index+2:end_content_length_line_index]
 
 
-	return content_length_num
+	return int(content_length_num)
 
 def read_header_file(header_file):
 
@@ -207,7 +207,8 @@ class HTTPClient(asyncore.dispatcher):
 def srget():
 	path = sys.argv[5]
 	file_name = sys.argv[2]
-	connection_number = sys.argv[4]
+	name, extension = file_name.split(".")
+	connection_number = int(sys.argv[4])
 
 	if "https" in path:
 		sys.exit(2)
@@ -223,12 +224,13 @@ def srget():
 	if port == None:
 		port = 80
 
+	content_length = get_content_length(get_header_from_sock(path))
 
 	if os.path.exists(file_name):
 
 		file_size = os.path.getsize(file_name)
 
-		content_length = get_content_length(get_header_from_sock(path))
+		# content_length = get_content_length(get_header_from_sock(path))
 
 		if file_size == int(content_length):
 			print "The file is already complete."
@@ -254,24 +256,53 @@ def srget():
 
 			print "resume"
 
-			if resume:
-				print "resuming"
+	# 		if resume:
+	# 			print "resuming"
 
-				HTTPClient(servName, obj, port, file_size, content_length, file_name)
+	# 			HTTPClient(servName, obj, port, file_size, content_length, file_name)
 
-			else:
-				print "normal download"
+	# 		else:
+	# 			print "normal download"
 
-				HTTPClient(servName, obj, port, 0, "", file_name)
-	else:
+	# 			HTTPClient(servName, obj, port, 0, "", file_name)
+	# else:
 
-		HTTPClient(servName, obj, port, 0, "", file_name)
+	# 	HTTPClient(servName, obj, port, 0, "", file_name)
+
+	clients = []
+	
+	for n in range(connection_number):
+		chunk_file = name + "_" + str(n) + "." + extension
+		# print type(content_length)
+		# print type(connection_number)
+		start = (content_length/connection_number + 1)*n
+
+		end = (content_length/connection_number) + start
+
+		clients.append(HTTPClient(servName, obj, port, start, end, chunk_file))
+
+
+
 
 	logging.basicConfig(level=logging.DEBUG,
     format="%(asctime)-15s %(name)s: %(message)s"
     )
  
 	asyncore.loop()
+
+	content = ""
+	for n in range(connection_number):
+		chunk_file = name + "_" + str(n) + "." + extension
+		with open(chunk_file, "r") as cf:
+			data = cf.read()
+			content += data
+
+	with open(file_name, "a+") as f:
+		f.write(content)
+
+	for n in range(connection_number):
+		chunk_file = name + "_" + str(n) + "." + extension
+		os.remove(chunk_file)
 
 	
 

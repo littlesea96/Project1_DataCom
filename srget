@@ -1,51 +1,33 @@
 #!/usr/bin/env python
-
-import socket as sk
+import asyncore, socket
+import logging
+from cStringIO import StringIO 
+import sys
 import os
 from urlparse import urlparse
-import sys
-from cStringIO import StringIO
+import socket as sk
+
 
 def headerDownloadRequest(serv, objName):
 	return ("HEAD {o} HTTP/1.1\r\n"+"Host: {s}"+"\r\n" + "\r\n\r\n").format(o=objName, s=serv)
 
-def mkDownloadRequest(serv, objName, filesize, end_point):
-	return ("GET {o} HTTP/1.1\r\n"+"Host: {s}"+"\r\n" + "Range: bytes={h}-{e}"+"\r\n\r\n").format(o=objName, s=serv, h=str(filesize), e=str(end_point))
 
-def open_socket(path, file_name, start_point, end_point):
+def get_header(data_chunk, filename):
 
-	url = urlparse(path)
+	if "\r\n\r\n" in data_chunk:
+		end_header_index = data_chunk.find("\r\n\r\n")
+		header = data_chunk[:end_header_index+3] # +3 for \r\n\r\n
+		the_rest = data_chunk[end_header_index+4:] # +4 for \r\n\r\n
 
-	servName = url[1]
-	obj = url[2]
-	port = url.port
+		# print "header", header
+		# print "the_rest", the_rest
 
-	if port == None:
-		port = 80
-
-	## creat an empty socket
-	sock = sk.socket(sk.AF_INET, sk.SOCK_STREAM)
-
-	## connect to a destination as specified by the pair
-	sock.connect((servName, port))
-
-	request = mkDownloadRequest(servName, obj, start_point, end_point)
-	sock.send(request)
-
-	return sock
-
-def get_header(sock_):
-	data = ""
-	while True:
-		data_chunk = sock_.recv(1024)
-		data += data_chunk
-		if "\r\n\r\n" in data:
-			end_header_index = data.find("\r\n\r\n")
-			header = data[:end_header_index+3] # +3 for \r\n\r\n
-			the_rest = data[end_header_index+4:] # +4 for \r\n\r\n
-			break
-
-	return header, the_rest
+		header_file = open("header_"+filename+"_temp.txt", "a+")
+		header_file.write(header)
+		header_file.flush()
+		header_file.close()
+		# print "header in get_header", header
+		return header, the_rest
 
 def get_header_from_sock(path):
 	url = urlparse(path)
@@ -72,6 +54,7 @@ def get_header_from_sock(path):
 
 	return header
 
+
 def get_content_length(header):
 
 	if "Content-Length:" not in header:
@@ -87,7 +70,7 @@ def get_content_length(header):
 		content_length_num = content_length_line[colon_index+2:end_content_length_line_index]
 
 
-	return content_length_num
+	return int(content_length_num)
 
 def read_header_file(header_file):
 
@@ -128,21 +111,126 @@ def get_last_modified(header):
 
 	return last_modified
 
-def srget():
+def make_request(req_type, what, details, size, end_point, version="1.1"):
+    """ Compose an HTTP request """
+    NL = "\r\n"
+    request_line = "{req_type} {what} HTTP/{ver}".format(
+        req_type=req_type,
+        what=what,
+        ver=version
+    )
+ 
+    detail_lines = NL.join(
+        "{}: {}".format(name, value) for name, value in details.iteritems()
+    )
 
-	path = sys.argv[3]
+    bytes_range = "Range: bytes={h}-{e}".format(h=size, e=end_point)
+ 
+    full_request = request_line + NL + detail_lines+ NL + bytes_range + NL + NL
+
+    print "full_request", full_request
+    return full_request
+
+
+class HTTPClient(asyncore.dispatcher): 
+
+	def __init__(self, host, path, port, filesize, end_point, file_name):
+		asyncore.dispatcher.__init__(self)	
+		self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
+
+		self.connect((host, port))
+
+		self.host = host
+		self.header_kept = True
+		self.recvbuf = StringIO()  
+		self.logger = logging.getLogger(host+path)
+
+		self.sendbuf = ""
+		
+		self.write(
+			make_request('GET', path,
+				{"host": host, "Connection": "close"}, filesize, end_point) 
+			)
+
+		self.filename = file_name
+		
+
+	def write(self, msg):
+		self.sendbuf += msg
+
+
+	def handle_connect(self):
+		self.logger.debug("connection established")
+
+
+	def handle_close(self):
+		self.logger.debug("got disconnected")
+		os.remove("header_" + self.filename +"_temp.txt")
+
+		self.close()
+
+
+	def handle_read(self): 
+		data_chunk = self.recv(1024)
+		# self.logger.debug("recv {0} bytes".format(len(data_chunk)))
+
+		f = open(self.filename, "a+")
+
+		if self.header_kept == True:
+			# print "enter if"
+			header, the_rest = get_header(data_chunk, self.filename)
+			# print header
+			f.write(the_rest)
+			f.flush()
+			f.close()
+
+			if header != "":
+				# print "enter if inside"
+				self.header_kept = False
+				# print "keep all header"
+		else:
+		
+			f.write(data_chunk)
+			f.flush()
+			f.close()
+
+	def writeable(self): 
+		return len(self.sendbuf) > 0 
+
+
+	def handle_write(self):
+		bytes_send = self.send(self.sendbuf)
+		self.sendbuf = self.sendbuf[bytes_send:] 
+
+
+
+def srget():
+	path = sys.argv[5]
 	file_name = sys.argv[2]
+	name, extension = file_name.split(".")
+	connection_number = int(sys.argv[4])
 
 	if "https" in path:
 		sys.exit(2)
 	elif "http://" not in path:
 		path = "http://" + path
 
+	url = urlparse(path)
+
+	servName = url[1]
+	obj = url[2]
+	port = url.port
+
+	if port == None:
+		port = 80
+
+	content_length = get_content_length(get_header_from_sock(path))
+
 	if os.path.exists(file_name):
 
 		file_size = os.path.getsize(file_name)
 
-		content_length = get_content_length(get_header_from_sock(path))
+		# content_length = get_content_length(get_header_from_sock(path))
 
 		if file_size == int(content_length):
 			print "The file is already complete."
@@ -166,135 +254,57 @@ def srget():
 			else:
 				resume = False
 
-			if resume:
+			# print "resume"
 
-				sock = open_socket(path, file_name, file_size, content_length_old_file)
+	# 		if resume:
+	# 			print "resuming"
 
-				header, the_rest = get_header(sock)
+	# 			HTTPClient(servName, obj, port, file_size, content_length, file_name)
 
-				data_body = the_rest
+	# 		else:
+	# 			print "normal download"
 
-				f = open(file_name, "a+")
-				f.write(the_rest)
-				f.flush()
+	# 			HTTPClient(servName, obj, port, 0, "", file_name)
+	# else:
 
-				len_content = file_size + len(the_rest)
+	# 	HTTPClient(servName, obj, port, 0, "", file_name)
 
-				while True:
+	clients = []
+	
+	for n in range(connection_number):
+		chunk_file = name + "_" + str(n) + "." + extension
+		# print type(content_length)
+		# print type(connection_number)
+		start = (content_length/connection_number + 1)*n
 
-					print "len_content", len_content
-					print "content_length", int(content_length)
+		end = (content_length/connection_number) + start
 
-					if len_content == int(content_length):
-						os.remove("header_"+file_name+"_temp.txt")
-						f.close()
-						sock.close()
-						break
-					else:
-						data_chunk = sock.recv(1024)
-						data_body += data_chunk
+		clients.append(HTTPClient(servName, obj, port, start, end, chunk_file))
 
-						len_content += len(data_chunk)
 
-						f.write(data_chunk)
-						f.flush()
-			else:
 
-				sock = open_socket(path, file_name, 0, "")
 
-				header, the_rest = get_header(sock)
+	logging.basicConfig(level=logging.DEBUG,
+    format="%(asctime)-15s %(name)s: %(message)s"
+    )
+ 
+	asyncore.loop()
 
-				data_body = the_rest
+	content = ""
+	for n in range(connection_number):
+		chunk_file = name + "_" + str(n) + "." + extension
+		with open(chunk_file, "r") as cf:
+			data = cf.read()
+			content += data
 
-				content_length = get_content_length(header)
+	with open(file_name, "a+") as f:
+		f.write(content)
 
-				header_file_name = "header_"+file_name+"_temp.txt"
+	for n in range(connection_number):
+		chunk_file = name + "_" + str(n) + "." + extension
+		os.remove(chunk_file)
 
-				header_file = open(header_file_name, "a+")
+	
 
-				header_file.write(header)
-				header_file.flush()
-
-				header_file.close()
-
-				f = open(file_name, "a+")
-				f.write(the_rest)
-				f.flush()
-
-				while True:
-					if content_length == 0 and len(data_chunk) == 0:
-						os.remove("header_"+file_name+"_temp.txt")
-						f.close()
-						break
-					elif len(data_body) == int(content_length):
-						os.remove("header_"+file_name+"_temp.txt")
-						f.close()
-						sock.close()
-						break
-					else:
-						data_chunk = sock.recv(1024)
-						data_body += data_chunk
-
-						f.write(data_chunk)
-						f.flush()
-
-	else:
-		sock = open_socket(path, file_name, 0, "")
-
-		header, the_rest = get_header(sock)
-
-		data_body = the_rest
-
-		content_length = get_content_length(header)
-
-		header_file_name = "header_"+file_name+"_temp.txt"
-
-		header_file = open(header_file_name, "a+")
-
-		header_file.write(header)
-		header_file.flush()
-
-		header_file.close()
-
-		f = open(file_name, "a+")
-		f.write(the_rest)
-		f.flush()
-
-		while True:
-			if content_length == 0 and len(data_chunk) == 0:
-				os.remove("header_"+file_name+"_temp.txt")
-				f.close()
-				break
-			elif len(data_body) == int(content_length):
-				os.remove("header_"+file_name+"_temp.txt")
-				f.close()
-				sock.close()
-				break
-			else:
-				data_chunk = sock.recv(1024)
-				data_body += data_chunk
-
-				f.write(data_chunk)
-				f.flush()
 
 srget()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -10,7 +10,7 @@ This program is for downloading file by getting file path from user
     where <output file> is your desired name with the extension, [numConn] is number of simultaneous connection.
 3. Press enter
 
-# Library that used in this program
+# Libraries that are used in this program
 1. asyncore 
 2. logging
 3. cStringIO

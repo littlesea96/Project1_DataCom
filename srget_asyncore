@@ -1,0 +1,206 @@
+#!/usr/bin/env python
+import asyncore, socket
+import logging
+from cStringIO import StringIO 
+import sys
+import os
+from urlparse import urlparse
+
+
+def get_header(data_chunk, filename):
+
+	if "\r\n\r\n" in data_chunk:
+		end_header_index = data_chunk.find("\r\n\r\n")
+		header = data_chunk[:end_header_index+3] # +3 for \r\n\r\n
+		the_rest = data_chunk[end_header_index+4:] # +4 for \r\n\r\n
+
+		# print "header", header
+		# print "the_rest", the_rest
+
+		header_file = open("header_"+filename+"temp.txt", "a+")
+		header_file.write(header)
+		header_file.flush()
+		header_file.close()
+		print "header in get_header", header
+		return header, the_rest
+
+
+def get_content_length(header):
+
+	if "Content-Length:" not in header:
+		content_length_num = 0
+	else:
+		content_length_index = header.find("Content-Length:")
+		end_header_index = header.find("\r\n\r\n")
+		content_length_line = header[content_length_index:end_header_index]
+
+		end_content_length_line_index = content_length_line.find("\r\n")
+		colon_index = content_length_line.find(":")
+
+		content_length_num = content_length_line[colon_index+2:end_content_length_line_index]
+
+
+	return content_length_num
+
+def read_header_file(header_file):
+
+	header_file = open(header_file, "r")
+	header = ""
+
+	for line in header_file:
+		header += line
+
+	return header
+
+def get_ETag(header):
+
+	str_header = StringIO(header)
+	ETag = None
+	for line in str_header:
+		if "ETag:" in line:
+			find_quote = line.find('"')
+			end_line = line.find("\r\n")
+
+			ETag = line[find_quote:end_line]
+
+			break
+
+	return ETag
+
+def get_last_modified(header):
+
+	str_header = StringIO(header)
+	last_modified = None
+	for line in str_header:
+		if "Last-Modified" in line:
+			find_colon = line.find(": ")
+			end_line = line.find("\r\n")
+			last_modified = line[find_colon+2:end_line]
+
+			break
+
+	return last_modified
+
+def make_request(req_type, what, details, size, end_point, version="1.1"):
+    """ Compose an HTTP request """
+    NL = "\r\n"
+    request_line = "{req_type} {what} HTTP/{ver}".format(
+        req_type=req_type,
+        what=what,
+        ver=version
+    )
+ 
+    detail_lines = NL.join(
+        "{}: {}".format(name, value) for name, value in details.iteritems()
+    )
+
+    bytes_range = "Range: bytes={h}-{e}".format(h=size, e=end_point)
+ 
+    full_request = request_line + NL + detail_lines+ NL + bytes_range + NL + NL
+
+    print "full_request", full_request
+    return full_request
+
+
+class HTTPClient(asyncore.dispatcher): 
+
+	def __init__(self, host, path, port, filesize, end_point, file_name):
+		asyncore.dispatcher.__init__(self)	
+		self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
+
+		self.connect((host, port))
+
+		self.host = host
+		self.header_kept = True
+		self.recvbuf = StringIO()  
+		self.logger = logging.getLogger(host+path)
+
+		self.sendbuf = ""
+		
+		self.write(
+			make_request('GET', path,
+				{"host": host, "Connection": "close"}, filesize, end_point) 
+			)
+
+		self.filename = file_name
+		
+
+	def write(self, msg):
+		self.sendbuf += msg
+
+
+	def handle_connect(self):
+		self.logger.debug("connection established")
+
+
+	def handle_close(self):
+		self.logger.debug("got disconnected")
+		self.close()
+
+
+	def handle_read(self): 
+		data_chunk = self.recv(1024)
+		# self.logger.debug("recv {0} bytes".format(len(data_chunk)))
+
+		f = open(self.filename, "a+")
+
+		if self.header_kept == True:
+			print "enter if"
+			header, the_rest = get_header(data_chunk, self.filename)
+			print header
+			f.write(the_rest)
+			f.flush()
+			f.close()
+
+			if header != "":
+				print "enter if inside"
+				self.header_kept = False
+				print "keep all header"
+		else:
+		
+			f.write(data_chunk)
+			f.flush()
+			f.close()
+
+	def writeable(self): 
+		return len(self.sendbuf) > 0 
+
+
+	def handle_write(self):
+		bytes_send = self.send(self.sendbuf)
+		self.sendbuf = self.sendbuf[bytes_send:] 
+
+
+
+def srget():
+	path = sys.argv[5]
+	file_name = sys.argv[2]
+	connection_number = sys.argv[4]
+
+	if "https" in path:
+		sys.exit(2)
+	elif "http://" not in path:
+		path = "http://" + path
+
+	url = urlparse(path)
+
+	servName = url[1]
+	obj = url[2]
+	port = url.port
+
+	if port == None:
+		port = 80
+
+
+	HTTPClient(servName, obj, port, 0, "", file_name)
+
+	logging.basicConfig(level=logging.DEBUG,
+    format="%(asctime)-15s %(name)s: %(message)s"
+    )
+ 
+	asyncore.loop()
+
+	
+
+
+srget()
